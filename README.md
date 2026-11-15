@@ -4,9 +4,10 @@
 
 选中的会话 → 右键 → 菜单最下方（归档下面，危险色，独立分隔线）→ 确认弹窗 → 消失。
 
+- 版本：**v2**（`2.0.0`）——修了暗色主题下确认框「白底白字」的配色 bug
 - 目标运行时：DSH `0.2.x`（本机实测 `0.2.2-rc.3`）
 - 依赖：零。host 半只用 node 内置模块，浏览器半手写 loader 协议 + `require('react')`
-- 测试：`node test/purge.test.mjs`（真实文件擦除 + 路由鉴权 + 客户端菜单契约，全绿）
+- 测试：`node test/purge.test.mjs`（真实文件擦除 + 路由鉴权 + 客户端菜单契约 + 主题对比度，全绿）
 
 ---
 
@@ -150,7 +151,50 @@ dsh-plugin-session-purge/
 
 ---
 
-## 7. 排错
+## 7. 配色（v2 修过一个真 bug）
+
+v1 的浮层写的是：
+
+```js
+background: 'var(--dsw-alias-bg-primary, #ffffff)'
+color:      'var(--dsw-alias-label-primary, #111111)'
+```
+
+但 **DSH 根本没有 `--dsw-alias-bg-primary` 这个 token**（真实名字是 `bg-base` /
+`bg-layer-1..3` / `bg-overlay` / `bg-mask-1..3`），于是背景永远退回硬编码白色；
+而 `--dsw-alias-label-primary` 是真存在的，暗色主题下取到 `#f9fafb`。
+结果：**白底白字，对话框里所有文字隐形，只剩那颗写死红底白字的「彻底删除」**。
+
+现在的原则一条：**背景和文字必须来自同一套主题**。
+
+| 用途 | token | 暗色实测 | 亮色实测 |
+| --- | --- | --- | --- |
+| 卡片表面 | `--dsw-alias-bg-layer-2` | `#2c2c2e` | `#ffffff` |
+| 主文字 | `--dsw-alias-label-primary` | `#f9fafb` | `#0f1115` |
+| 次要文字 | `--dsw-alias-label-secondary` | `#cfd3d6` | — |
+| 描边 | `--dsw-alias-border-l2` | 白 12% | 黑 10% |
+| 危险按钮 | `--dsw-alias-state-error-primary` | `#f25a5a` | `#ec1313` |
+| 遮罩 | `--dsw-alias-bg-mask-1` | 黑 50% | 黑 24% |
+
+表面色 token 取不到时，**整套**退回自洽浅色（`#ffffff` / `#111111`），绝不混搭——
+混搭就是这次事故的根因。次要文字也改成用 token 而不是 `opacity` 压暗。
+
+测试里锁死了对比度（WCAG）：暗色正文 **13.3:1**、次要 9.3:1，兜底配色 18.9:1；
+外加一条静态守卫，源码里再出现 `--dsw-alias-bg-primary` / `--dsw-shadow-lv3`
+这种不存在的 token 直接测试失败。
+
+---
+
+## 8. 版本记录
+
+| 版本 | 日期 | 内容 |
+| --- | --- | --- |
+| **v2**（`2.0.0`） | 2026-11-15 | **修配色**：确认框改用真实存在的 `--dsw-alias-bg-layer-2` 作表面色，与 `--dsw-alias-label-primary` 同源；次要文字改用 `label-secondary`（不再靠 `opacity` 压暗）；错误色/遮罩改用主题 token。新增 WCAG 对比度回归测试 + 死 token 静态守卫。 |
+| v1（`0.1.0`） | 2026-11-15 | 首版：右键「彻底删除…」+ host 端真实擦除（停活 → 出归档 → 摘账本 → dispose 活会话 → 删日志/冷读缓存/概述缓存）。 |
+
+---
+
+## 9. 排错
 
 | 症状 | 处理 |
 | --- | --- |
@@ -159,4 +203,5 @@ dsh-plugin-session-purge/
 | 报 405 | 只支持 POST |
 | 删了但侧栏还在 | 客户端快照没刷新：Cmd+R 重载界面；响应 `warnings` 若写着 `still resident in host memory`，说明要重启 DSH |
 | 刷新后仍不消失 | 该会话在本次运行中被打开过，重启 DSH 后自然消失 |
-| 弹窗样式不对 | 主题变量缺失时会退回内置色值，功能不受影响 |
+| 弹窗只有一颗红按钮、文字全看不见 | v1 的配色 bug：用了不存在的 `--dsw-alias-bg-primary`（背景永远白）配真实的 `--dsw-alias-label-primary`（暗色主题下近白）。v2 起改用 `bg-layer-2` + 同一主题的文字色，重启 DSH 即恢复 |
+| 弹窗样式不对 | 主题变量缺失时会整套退回内置浅色配色（保证对比度），功能不受影响 |

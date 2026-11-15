@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-session-purge",
-  "version": "0.1.0",
+  "version": "2.0.0",
   "private": true,
   "description": "彻底删除 DSH 会话：右键菜单 + host 端真实擦除（日志、冷读缓存、概述缓存、workspace 账本）。",
   "type": "module",

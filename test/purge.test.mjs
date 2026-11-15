@@ -517,4 +517,89 @@ assert.equal(typeof overlaySlot[1], 'function')
 assert.equal(effectLabels.length, 1)
 console.log('PASS 客户端：菜单项（danger/order 700/分隔线）、图标槽、确认浮层槽')
 
-console.log('\n全部通过：host 擦除 + 路由鉴权 + 客户端菜单契约')
+/* ---------------------------------------------------------------- 主题配色 */
+
+// 0.1.0 的真实事故：背景写 `var(--dsw-alias-bg-primary, #fff)`——DSH 根本没有
+// 这个 token，于是永远是白底；而 `--dsw-alias-label-primary` 存在，暗色主题下
+// 是 #f9fafb。白底白字 → 对话框整块文字隐形。下面用真实 token 值算对比度锁死。
+
+/** WCAG 相对亮度。 */
+function luminance(hex) {
+  const value = hex.replace('#', '')
+  const full = value.length === 3 ? value.split('').map((c) => c + c).join('') : value
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(full.slice(i, i + 2), 16) / 255)
+  const linear = (c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)
+  return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b)
+}
+
+/** 两色对比度。 */
+function contrast(a, b) {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x)
+  return (hi + 0.05) / (lo + 0.05)
+}
+
+/** 用一组 token 值假装成宿主的 getComputedStyle。 */
+function withTokens(tokens, run) {
+  const previous = globalThis.window
+  const previousDocument = globalThis.document
+  const documentElement = {}
+  globalThis.window = {
+    getComputedStyle: () => ({ getPropertyValue: (name) => tokens[name] ?? '' }),
+    document: { documentElement },
+  }
+  globalThis.document = { documentElement }
+  try {
+    return run()
+  } finally {
+    globalThis.window = previous
+    if (previousDocument === undefined) delete globalThis.document
+    else globalThis.document = previousDocument
+  }
+}
+
+const DARK = {
+  '--dsw-alias-bg-layer-2': '#2c2c2e',
+  '--dsw-alias-label-primary': '#f9fafb',
+  '--dsw-alias-label-secondary': '#cfd3d6',
+  '--dsw-alias-border-l2': 'rgba(255, 255, 255, 0.12)',
+  '--dsw-alias-state-error-primary': '#f25a5a',
+  '--dsw-alias-bg-mask-1': '#00000080',
+}
+
+{
+  const p = withTokens(DARK, () => clientModule.__test.palette())
+  assert.equal(p.surface, '#2c2c2e', '必须用真实存在的 bg-layer-2 token')
+  assert.equal(p.label, '#f9fafb')
+  const body = contrast(p.surface, p.label)
+  const note = contrast(p.surface, p.secondary)
+  assert.ok(body >= 4.5, '暗色主题正文对比度不足：' + body.toFixed(2))
+  assert.ok(note >= 3, '暗色主题次要文字对比度不足：' + note.toFixed(2))
+  assert.equal(contrast(p.surface, p.label) < 1.5, false, '白底白字必须不可能出现')
+  console.log('PASS 暗色主题：正文对比度 ' + body.toFixed(1) + ':1，次要 ' + note.toFixed(1) + ':1')
+}
+
+{
+  // token 一个都取不到（未来版本改名 / 测试环境）时，必须整套退回自洽浅色。
+  const p = withTokens({}, () => clientModule.__test.palette())
+  assert.equal(p.surface, '#ffffff')
+  assert.equal(p.label, '#111111')
+  assert.ok(contrast(p.surface, p.label) >= 4.5, '兜底浅色对比度不足')
+  assert.ok(contrast(p.surface, p.secondary) >= 4.5)
+  console.log('PASS 兜底配色：token 全缺时白底黑字 ' + contrast(p.surface, p.label).toFixed(1) + ':1，不会白底白字')
+}
+
+{
+  // 静态守卫：客户端源码里不得再出现不存在的 token 名（注释除外）。
+  const source = await readFile(new URL('../lib/client.js', import.meta.url), 'utf8')
+  const code = source
+    .split('\n')
+    .filter((line) => !line.trim().startsWith('*') && !line.trim().startsWith('//'))
+    .join('\n')
+  for (const dead of ['--dsw-alias-bg-primary', '--dsw-shadow-lv3']) {
+    assert.equal(code.includes(dead), false, '不得再引用不存在的 token：' + dead)
+  }
+  assert.ok(code.includes('--dsw-alias-bg-layer-2'), '必须用真实 token bg-layer-2')
+  console.log('PASS 静态守卫：不再引用不存在的主题 token')
+}
+
+console.log('\n全部通过：host 擦除 + 路由鉴权 + 客户端菜单契约 + 主题配色对比度')
