@@ -1,0 +1,6 @@
+# DSH bundle layer: `dsh plugin add` 会把这段并进当前 profile 的 patch 层。
+- insert:
+    - id: dsh-plugin-session-purge
+      name: 'dsh-plugin-session-purge'
+      config:
+        httpPath: /session-purge

@@ -1,0 +1,56 @@
+{
+  "name": "dsh-plugin-session-purge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "彻底删除 DSH 会话：右键菜单 + host 端真实擦除（日志、冷读缓存、概述缓存、workspace 账本）。",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "engines": {
+    "dsh": ">=0.2.1-rc.1 <0.3.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "entry": "./lib/client.js",
+      "platform": "web",
+      "inject": [],
+      "immediately": true
+    }
+  },
+  "scripts": {
+    "test": "node test/purge.test.mjs"
+  },
+  "license": "MIT",
+  "author": "YG",
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "cordis",
+    "session",
+    "delete",
+    "context-menu"
+  ],
+  "homepage": "https://github.com/zzwtian/dsh-plugin-session-purge#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zzwtian/dsh-plugin-session-purge.git"
+  },
+  "bugs": {
+    "url": "https://github.com/zzwtian/dsh-plugin-session-purge/issues"
+  }
+}

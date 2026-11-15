@@ -1,0 +1,12 @@
+# 运行时产物
+node_modules/
+*.log
+session-purge.log
+
+# 本地工具留下的缓存目录
+.dsh-project-memory/
+.DS_Store
+
+# 编辑器
+.vscode/
+.idea/
