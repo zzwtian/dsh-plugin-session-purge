@@ -4,7 +4,8 @@
 
 选中的会话 → 右键 → 菜单最下方（归档下面，危险色，独立分隔线）→ 确认弹窗 → 消失。
 
-- 版本：**v2**（`2.0.0`）——修了暗色主题下确认框「白底白字」的配色 bug
+- 版本：**v2.1**（`2.1.0`）——安装脚本跨平台（macOS / Linux / Windows），新增 `install.ps1`
+- 上个版本：**v2**（`2.0.0`）——修了暗色主题下确认框「白底白字」的配色 bug
 - 目标运行时：DSH `0.2.x`（本机实测 `0.2.2-rc.3`）
 - 依赖：零。host 半只用 node 内置模块，浏览器半手写 loader 协议 + `require('react')`
 - 测试：`node test/purge.test.mjs`（真实文件擦除 + 路由鉴权 + 客户端菜单契约 + 主题对比度，全绿）
@@ -13,16 +14,72 @@
 
 ## 1. 装上
 
+仓库放哪都行，安装只登记一条 `link:` 指向本地目录。各平台入口：
+
+**macOS / Linux**
+
 ```bash
 cd ~/Documents/deepseek-harness/default-workspace/plugins/dsh-plugin-session-purge
 ./install.sh          # 默认 desktop profile
 ```
 
-它做两件事：跑一遍冒烟测试，然后
+**Windows（Git Bash / MSYS2）** —— 同一个脚本，会自动转 `link:` 路径
 
 ```bash
-dsh plugin --profile desktop add "link:$PWD"
+cd ~/Documents/deepseek-harness/default-workspace/plugins/dsh-plugin-session-purge
+./install.sh
 ```
+
+**Windows（纯 PowerShell，不需要 bash）**
+
+```powershell
+cd $HOME\Documents\deepseek-harness\default-workspace\plugins\dsh-plugin-session-purge
+.\install.ps1                       # 默认 desktop profile
+
+# 默认 ExecutionPolicy 是 Restricted 时会被拦，绕过一次：
+powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+`install.ps1` 存成 UTF-8 **带 BOM**。PowerShell 5.1 在 GBK 代码页（936）下按 ANSI 读无 BOM
+的脚本，会把中文注释里的字节当成双字节的尾字节，吃掉后面的 `}` 和 `"`，然后报
+「语句块中缺少右 `}`」——纯粹是解码问题，不是脚本坏。**别把 BOM 去掉**。
+
+两个脚本做同一件事：跑一遍冒烟测试，然后
+
+```bash
+dsh plugin --profile desktop add "link:<本目录>"
+```
+
+它们自己找 `dsh` CLI：先看 `PATH`，再看
+
+| 平台 | CLI 落地位置 |
+| --- | --- |
+| macOS | `DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh`（可执行） |
+| Windows | `<install>\resources\app\dsh\node_modules\@deepseek-ai\dsh\lib\bin.js`（用 `node` 跑） |
+| Linux | 同 Windows 布局，或 `PATH` 上的 `dsh` |
+
+探测不到就显式指定：
+
+```bash
+DSH_RESOURCES="/c/Program Files/DeepSeek Harness/resources" ./install.sh
+DSH_CLI="C:/path/to/lib/bin.js" ./install.sh
+```
+
+```powershell
+.\install.ps1 -Resources 'D:\deepseek\resources'
+.\install.ps1 -DshCli 'C:\path\to\lib\bin.js'
+```
+
+> **`desktop` profile 归 Electron 桌面应用独占管理。** 这种环境下 CLI 直接拒绝：
+>
+> ```
+> error: profile "desktop" is managed exclusively by the Electron application
+> ```
+>
+> 这时别绕 CLI，改走应用内的插件管理器——Settings → 插件，或 agent 侧的
+> `plugin_manager` 工具——执行 `install_bundle`，`target` 填 `link:<本目录>`
+> （Windows 上用正斜杠，例如 `link:C:/Users/me/plugins/dsh-plugin-session-purge`）。
+> 非 desktop 的 profile（`web` / `headless` / 自建）用脚本就行。
 
 `dsh plugin` 只把参数转发给 profile 目录里的 pnpm，然后把包登记进
 `~/.dsh/profiles/desktop/package.json` 的 `dsh.profile.bundles`——**不需要手写 patch 行**
@@ -31,7 +88,7 @@ dsh plugin --profile desktop add "link:$PWD"
 实测装完的形状：
 
 ```
-node_modules/dsh-plugin-session-purge -> .../plugins/dsh-plugin-session-purge
+node_modules/dsh-plugin-session-purge -> .../plugins/dsh-plugin-session-purge   # Windows 上是 Junction
 package.json: "dependencies" + "dsh.profile.bundles" 各多一行
 ```
 
@@ -43,8 +100,11 @@ package.json: "dependencies" + "dsh.profile.bundles" 各多一行
 回滚：
 
 ```bash
-dsh plugin --profile desktop remove dsh-plugin-session-purge
+dsh plugin --profile desktop remove dsh-plugin-session-purge     # CLI 管的 profile
 ```
+
+`desktop` 这类 Electron 独占的 profile 用插件管理器移除 bundle
+（`remove_bundle` / Settings → 插件），CLI 那条会同样被拒。
 
 ---
 
@@ -123,7 +183,8 @@ dsh-plugin-session-purge/
 ├── lib/index.js       # host：purgeSession() + POST /session-purge
 ├── lib/client.js      # 浏览器：菜单项 + 确认浮层（手写 loader 协议，无构建）
 ├── test/purge.test.mjs
-└── install.sh
+├── install.sh         # macOS / Linux；Windows 走 Git Bash，路径自动转换
+└── install.ps1        # Windows 原生入口（纯 PowerShell，不需要 bash）
 ```
 
 两个半怎么接上的：
@@ -189,6 +250,7 @@ color:      'var(--dsw-alias-label-primary, #111111)'
 
 | 版本 | 日期 | 内容 |
 | --- | --- | --- |
+| **v2.1**（`2.1.0`） | 2026-11-16 | **安装跨平台**：`install.sh` 自动探测 macOS / Linux / Windows 的 `dsh` CLI 位置，Windows 下把 `link:` 目标转成正斜杠 Windows 路径；新增 `install.ps1`（纯 PowerShell 入口，参数 `-ProfileName` / `-Resources` / `-DshCli`）。README 写明 `desktop` profile 归 Electron 独占管理、CLI 会被拒绝，须改走应用内插件管理器。作者署名 `zzwtian`。 |
 | **v2**（`2.0.0`） | 2026-11-15 | **修配色**：确认框改用真实存在的 `--dsw-alias-bg-layer-2` 作表面色，与 `--dsw-alias-label-primary` 同源；次要文字改用 `label-secondary`（不再靠 `opacity` 压暗）；错误色/遮罩改用主题 token。新增 WCAG 对比度回归测试 + 死 token 静态守卫。 |
 | v1（`0.1.0`） | 2026-11-15 | 首版：右键「彻底删除…」+ host 端真实擦除（停活 → 出归档 → 摘账本 → dispose 活会话 → 删日志/冷读缓存/概述缓存）。 |
 
@@ -201,6 +263,7 @@ color:      'var(--dsw-alias-label-primary, #111111)'
 | 右键没有「彻底删除…」 | 没重启；或客户端半组合失败，看控制台 `[session-purge]` |
 | 点了报 401 | 请求没带 DSH 的 Web 会话（直接 curl 会这样，属正常） |
 | 报 405 | 只支持 POST |
+| `error: profile "desktop" is managed exclusively by the Electron application` | 该 profile 由桌面应用独占管理，CLI 改不动它。改用应用内插件管理器（Settings → 插件，或 `plugin_manager` 工具的 `install_bundle`），`target` 填 `link:<本目录>` |
 | 删了但侧栏还在 | 客户端快照没刷新：Cmd+R 重载界面；响应 `warnings` 若写着 `still resident in host memory`，说明要重启 DSH |
 | 刷新后仍不消失 | 该会话在本次运行中被打开过，重启 DSH 后自然消失 |
 | 弹窗只有一颗红按钮、文字全看不见 | v1 的配色 bug：用了不存在的 `--dsw-alias-bg-primary`（背景永远白）配真实的 `--dsw-alias-label-primary`（暗色主题下近白）。v2 起改用 `bg-layer-2` + 同一主题的文字色，重启 DSH 即恢复 |
